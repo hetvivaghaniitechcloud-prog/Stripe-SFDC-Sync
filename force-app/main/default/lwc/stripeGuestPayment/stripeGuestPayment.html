@@ -1,0 +1,32 @@
+<template>
+    <lightning-card title={heading} icon-name="utility:payment_gateway">
+        <div class="slds-p-around_medium">
+            <template if:true={isLoading}>
+                <div class="slds-align_absolute-center slds-p-vertical_large">
+                    <lightning-spinner alternative-text="Loading" size="medium"></lightning-spinner>
+                </div>
+            </template>
+
+            <template if:true={showError}>
+                <div class="slds-text-color_error slds-p-bottom_small" role="alert">{errorMessage}</div>
+                <lightning-button label="Try again" onclick={handleReset}></lightning-button>
+            </template>
+
+            <template if:true={showForm}>
+                <lightning-input label="Name" data-field="name" value={name} onchange={handleChange} class="slds-m-bottom_x-small"></lightning-input>
+                <lightning-input label="Email" type="email" data-field="email" value={email} required onchange={handleChange} class="slds-m-bottom_x-small"></lightning-input>
+                <lightning-input label="Phone" type="tel" data-field="phone" value={phone} onchange={handleChange} class="slds-m-bottom_x-small"></lightning-input>
+                <template if:true={errorMessage}>
+                    <div class="slds-text-color_error slds-text-body_small slds-m-vertical_x-small">{errorMessage}</div>
+                </template>
+                <div class="slds-m-top_medium slds-text-align_right">
+                    <lightning-button variant="brand" label="Pay" onclick={handlePay}></lightning-button>
+                </div>
+            </template>
+
+            <template if:true={showEmbedded}>
+                <c-stripe-checkout-embedded publishable-key={publishableKey} client-secret={clientSecret}></c-stripe-checkout-embedded>
+            </template>
+        </div>
+    </lightning-card>
+</template>

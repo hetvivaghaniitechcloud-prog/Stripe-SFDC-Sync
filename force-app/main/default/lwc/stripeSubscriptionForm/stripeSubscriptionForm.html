@@ -1,0 +1,38 @@
+<template>
+    <lightning-card title="Subscription" icon-name="utility:recurring_exception">
+        <div class="slds-p-horizontal_medium slds-p-bottom_medium">
+            <template if:true={isLoading}>
+                <div class="slds-align_absolute-center slds-p-vertical_large">
+                    <lightning-spinner alternative-text="Loading" size="medium"></lightning-spinner>
+                </div>
+            </template>
+
+            <template if:true={showError}>
+                <div class="slds-text-color_error slds-p-around_small" role="alert">{errorMessage}</div>
+                <div class="slds-text-align_right">
+                    <lightning-button label="Close" onclick={handleClose}></lightning-button>
+                </div>
+            </template>
+
+            <template if:true={showForm}>
+                <p class="slds-m-bottom_small slds-text-body_regular">{planSummary}</p>
+                <lightning-input label="Email" type="email" value={customerEmail} onchange={handleEmailChange}></lightning-input>
+                <div class="slds-m-top_medium slds-grid slds-grid_align-end">
+                    <lightning-button label="Cancel" class="slds-m-right_x-small" onclick={handleClose}></lightning-button>
+                    <lightning-button variant="brand" label="Subscribe" onclick={handleSubscribe}></lightning-button>
+                </div>
+            </template>
+
+            <template if:true={showEmbedded}>
+                <c-stripe-checkout-embedded publishable-key={publishableKey} client-secret={clientSecret}
+                    onclose={handleChildClose}></c-stripe-checkout-embedded>
+            </template>
+
+            <template if:true={showElement}>
+                <c-stripe-payment-element publishable-key={publishableKey} client-secret={clientSecret}
+                    return-url={returnUrl} onsuccess={handleChildSuccess} onfailure={handleChildFailure}
+                    onclose={handleChildClose}></c-stripe-payment-element>
+            </template>
+        </div>
+    </lightning-card>
+</template>

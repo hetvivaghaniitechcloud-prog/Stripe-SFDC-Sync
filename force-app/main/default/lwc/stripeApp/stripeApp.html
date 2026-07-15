@@ -1,0 +1,218 @@
+<template>
+    <lightning-card title="Stripe Setup" icon-name="utility:payment_gateway">
+        <div class="slds-p-horizontal_medium">
+            <lightning-tabset variant="scoped">
+
+                <!-- Configuration -->
+                <lightning-tab label="Configuration" value="credentials">
+                    <div class="slds-grid slds-grid_align-spread slds-grid_vertical-align-center slds-m-bottom_small">
+                        <lightning-badge label={statusText} class={statusVariant}></lightning-badge>
+                        <div>
+                            <lightning-button label="Test Connection" icon-name="utility:sync" onclick={testConn} class="slds-m-right_x-small"></lightning-button>
+                            <lightning-button variant="brand" label="Save All" icon-name="utility:save" onclick={saveCred}></lightning-button>
+                        </div>
+                    </div>
+
+                    <lightning-accordion allow-multiple-sections-open active-section-name={openSections}>
+
+                        <!-- 1. AUTHENTICATION -->
+                        <lightning-accordion-section name="auth" label="API Credentials · Authentication">
+                            <lightning-layout multiple-rows>
+                                <lightning-layout-item size="6" padding="around-small">
+                                    <lightning-combobox label="Authentication Mode" data-field="authMode" field-level-help="Secret Key sends a Bearer key per request. Named Credential delegates auth to a Salesforce Named Credential (supports Custom / OAuth 2.0 for Stripe Connect)."
+                                        value={cred.authMode} options={authModeOptions} onchange={handleCredChange}></lightning-combobox>
+                                </lightning-layout-item>
+                                <lightning-layout-item size="12" padding="around-small">
+                                    <p class="slds-text-title_caps">Webhook signing secrets (whsec_…)</p>
+                                </lightning-layout-item>
+                                <lightning-layout-item size="6" padding="around-small">
+                                    <lightning-input type="password" label="Webhook Secret (Test)" data-field="webhookSecretTest" onchange={handleCredChange}></lightning-input>
+                                </lightning-layout-item>
+                                <lightning-layout-item size="6" padding="around-small">
+                                    <lightning-input type="password" label="Webhook Secret (Live)" data-field="webhookSecretLive" onchange={handleCredChange}></lightning-input>
+                                </lightning-layout-item>
+
+                                <template if:true={isKeyMode}>
+                                    <lightning-layout-item size="12" padding="around-small">
+                                        <p class="slds-text-title_caps">Auth Method 1 · Secret Key (test)</p>
+                                    </lightning-layout-item>
+                                    <lightning-layout-item size="6" padding="around-small">
+                                        <lightning-input label="Publishable Key (Test)" data-field="publishableKeyTest" placeholder="pk_test_…" onchange={handleCredChange}></lightning-input>
+                                    </lightning-layout-item>
+                                    <lightning-layout-item size="6" padding="around-small">
+                                        <lightning-input type="password" label="Secret Key (Test)" data-field="secretKeyTest" placeholder="sk_test_…" field-level-help="Stored in a Protected Custom Setting; never sent to the browser." onchange={handleCredChange}></lightning-input>
+                                    </lightning-layout-item>
+                                    <lightning-layout-item size="12" padding="around-small">
+                                        <p class="slds-text-title_caps">Secret Key (live)</p>
+                                    </lightning-layout-item>
+                                    <lightning-layout-item size="6" padding="around-small">
+                                        <lightning-input label="Publishable Key (Live)" data-field="publishableKeyLive" placeholder="pk_live_…" onchange={handleCredChange}></lightning-input>
+                                    </lightning-layout-item>
+                                    <lightning-layout-item size="6" padding="around-small">
+                                        <lightning-input type="password" label="Secret Key (Live)" data-field="secretKeyLive" placeholder="sk_live_…" onchange={handleCredChange}></lightning-input>
+                                    </lightning-layout-item>
+                                </template>
+
+                                <template if:true={isNcMode}>
+                                    <lightning-layout-item size="12" padding="around-small">
+                                        <p class="slds-text-title_caps">Auth Method 2 · Named Credential ({cred.environment})</p>
+                                    </lightning-layout-item>
+                                    <lightning-layout-item size="6" padding="around-small">
+                                        <lightning-input label="Named Credential name" data-field="namedCredential" value={cred.namedCredential}
+                                            field-level-help="A Named Credential pointing at https://api.stripe.com. Configure it in Setup with the secret key (Custom auth) or OAuth 2.0 for Connect."
+                                            onchange={handleCredChange}></lightning-input>
+                                    </lightning-layout-item>
+                                    <lightning-layout-item size="6" padding="around-small">
+                                        <lightning-input label="Publishable Key ({cred.environment})" data-field="publishableKeyTest" placeholder="pk_…" onchange={handleCredChange}></lightning-input>
+                                    </lightning-layout-item>
+                                </template>
+                            </lightning-layout>
+                        </lightning-accordion-section>
+
+                        <!-- 2. ENVIRONMENT -->
+                        <lightning-accordion-section name="env" label="Environment · endpoints, timeout, currency, URLs">
+                            <lightning-layout multiple-rows>
+                                <lightning-layout-item size="4" padding="around-small">
+                                    <lightning-combobox label="Active Environment" data-field="environment" value={cred.environment} options={envOptions} onchange={handleCredChange}></lightning-combobox>
+                                </lightning-layout-item>
+                                <lightning-layout-item size="4" padding="around-small">
+                                    <lightning-input type="number" label="API Timeout (seconds)" data-field="apiTimeoutSec" min="1" max="120" value={cred.apiTimeoutSec} onchange={handleCredChange}></lightning-input>
+                                </lightning-layout-item>
+                                <lightning-layout-item size="4" padding="around-small">
+                                    <lightning-input label="Stripe API Version" data-field="apiVersion" value={cred.apiVersion} onchange={handleCredChange}></lightning-input>
+                                </lightning-layout-item>
+                                <lightning-layout-item size="4" padding="around-small">
+                                    <lightning-combobox label="Default Currency" data-field="defaultCurrency" value={cred.defaultCurrency} options={currencyOptions} onchange={handleCredChange}></lightning-combobox>
+                                </lightning-layout-item>
+                                <lightning-layout-item size="4" padding="around-small">
+                                    <lightning-input label="Default Product Info" data-field="defaultProductInfo" value={cred.defaultProductInfo} onchange={handleCredChange}></lightning-input>
+                                </lightning-layout-item>
+                                <lightning-layout-item size="12" padding="around-small"></lightning-layout-item>
+                                <lightning-layout-item size="4" padding="around-small">
+                                    <lightning-input label="Success URL" data-field="successUrl" value={cred.successUrl} onchange={handleCredChange}></lightning-input>
+                                </lightning-layout-item>
+                                <lightning-layout-item size="4" padding="around-small">
+                                    <lightning-input label="Cancel URL" data-field="cancelUrl" value={cred.cancelUrl} onchange={handleCredChange}></lightning-input>
+                                </lightning-layout-item>
+                                <lightning-layout-item size="4" padding="around-small">
+                                    <lightning-input label="Return URL" data-field="returnUrl" value={cred.returnUrl} onchange={handleCredChange}></lightning-input>
+                                </lightning-layout-item>
+                            </lightning-layout>
+                        </lightning-accordion-section>
+
+                        <!-- 3. CHECKOUT MODE -->
+                        <lightning-accordion-section name="checkout" label="Checkout Mode · what the payment button offers">
+                            <p class="slds-text-body_small slds-text-color_weak slds-p-horizontal_small">Toggle which modes the Stripe payment button can use. Each Payment Config then picks one enabled mode.</p>
+                            <lightning-layout multiple-rows>
+                                <lightning-layout-item size="6" padding="around-small">
+                                    <div class="sc-card">
+                                        <div class="slds-grid slds-grid_align-spread">
+                                            <strong>🌐 Hosted Checkout</strong>
+                                            <lightning-input type="toggle" variant="label-hidden" data-field="hostedEnabled" checked={cred.hostedEnabled} onchange={handleCredChange}></lightning-input>
+                                        </div>
+                                        <p class="slds-text-body_small slds-text-color_weak">Redirect to Stripe's hosted page. Best for links & wallets (Google Pay).</p>
+                                        <lightning-combobox label="Redirect Behaviour" data-field="hostedRedirect" value={cred.hostedRedirect} options={redirectOptions} onchange={handleCredChange}></lightning-combobox>
+                                        <lightning-input label="Custom Logo URL" data-field="logoUrl" value={cred.logoUrl} onchange={handleCredChange}></lightning-input>
+                                    </div>
+                                </lightning-layout-item>
+                                <lightning-layout-item size="6" padding="around-small">
+                                    <div class="sc-card">
+                                        <div class="slds-grid slds-grid_align-spread">
+                                            <strong>🖥 Embedded (iframe overlay)</strong>
+                                            <lightning-input type="toggle" variant="label-hidden" data-field="embeddedEnabled" checked={cred.embeddedEnabled} onchange={handleCredChange}></lightning-input>
+                                        </div>
+                                        <p class="slds-text-body_small slds-text-color_weak">In-page popup — no redirect. Best for internal pages & community portals.</p>
+                                    </div>
+                                </lightning-layout-item>
+                                <lightning-layout-item size="6" padding="around-small">
+                                    <div class="sc-card">
+                                        <div class="slds-grid slds-grid_align-spread">
+                                            <strong>🎨 Custom (Payment Element)</strong>
+                                            <lightning-input type="toggle" variant="label-hidden" data-field="customElementEnabled" checked={cred.customElementEnabled} onchange={handleCredChange}></lightning-input>
+                                        </div>
+                                        <p class="slds-text-body_small slds-text-color_weak">Fully branded card form via Stripe Elements (in the popup).</p>
+                                    </div>
+                                </lightning-layout-item>
+                                <lightning-layout-item size="6" padding="around-small">
+                                    <div class="sc-card">
+                                        <div class="slds-grid slds-grid_align-spread">
+                                            <strong>🔗 Payment Link</strong>
+                                            <lightning-input type="toggle" variant="label-hidden" data-field="linkEnabled" checked={cred.linkEnabled} onchange={handleCredChange}></lightning-input>
+                                        </div>
+                                        <p class="slds-text-body_small slds-text-color_weak">Generate a shareable URL to send by email / SMS / WhatsApp.</p>
+                                    </div>
+                                </lightning-layout-item>
+                            </lightning-layout>
+                        </lightning-accordion-section>
+
+                        <!-- 4. WEBHOOKS -->
+                        <lightning-accordion-section name="webhooks" label="Webhooks · payment confirmation & lifecycle">
+                            <div class="slds-p-horizontal_small">
+                                <p class="slds-text-body_regular slds-m-bottom_x-small">Add this endpoint in <strong>Stripe Dashboard → Developers → Webhooks</strong>. It handles pending confirmations, receipts, refunds and recurring renewals — verified by signature and idempotent on the Stripe event id.</p>
+                                <lightning-input class="slds-m-bottom_x-small" label="Webhook Base URL (public Site — e.g. https://yourdomain.my.site.com)"
+                                    data-field="webhookBaseUrl" value={cred.webhookBaseUrl}
+                                    field-level-help="Stripe must reach this without login. Use your Experience/Force.com Site domain (…my.site.com), NOT the org login domain (…my.salesforce.com). Leave blank to use the org domain (requires the endpoint be exposed publicly)."
+                                    onchange={handleCredChange}></lightning-input>
+                                <div class="slds-grid slds-grid_vertical-align-center slds-m-bottom_small">
+                                    <lightning-input class="slds-grow" label="Webhook URL" value={webhookUrl} read-only></lightning-input>
+                                    <lightning-button label="Copy" icon-name="utility:copy" class="slds-m-left_x-small slds-m-top_large" onclick={copyWebhookUrl}></lightning-button>
+                                </div>
+                                <div class="slds-box slds-box_x-small slds-m-bottom_small" style="background:#f3f9ff;border-color:#c9e2ff">
+                                    <p class="slds-text-body_small slds-m-bottom_x-small">✨ <strong>One-click register</strong> — since your secret key is configured, create this endpoint in Stripe automatically and store the signing secret for you.</p>
+                                    <lightning-button variant="brand" label="Register Webhook in Stripe" icon-name="utility:upload" onclick={registerWebhook}></lightning-button>
+                                    <p class="slds-text-body_small slds-text-color_weak slds-m-top_x-small">The endpoint must be reachable by Stripe — expose the Apex REST resource via a Salesforce Site (guest) so events are delivered.</p>
+                                </div>
+                                <p class="slds-text-title_caps">Events handled</p>
+                                <ul class="slds-list_dotted slds-text-body_small">
+                                    <template for:each={webhookEvents} for:item="ev">
+                                        <li key={ev}>{ev}</li>
+                                    </template>
+                                </ul>
+                            </div>
+                        </lightning-accordion-section>
+
+                    </lightning-accordion>
+
+                    <div class="slds-m-top_medium slds-text-align_right">
+                        <lightning-button variant="brand" label="Save All" icon-name="utility:save" onclick={saveCred}></lightning-button>
+                    </div>
+                </lightning-tab>
+
+                <!-- Payment Configs -->
+                <lightning-tab label="Payment Configs" value="configs">
+                    <template if:true={showConfigList}>
+                        <div class="slds-grid slds-grid_align-spread slds-grid_vertical-align-center slds-m-bottom_small">
+                            <p class="slds-text-body_small slds-text-color_weak">Each config maps an object to Stripe payment parameters. One config per object/payment context.</p>
+                            <lightning-button variant="brand" label="New Config" icon-name="utility:add" onclick={newConfig}></lightning-button>
+                        </div>
+                        <lightning-datatable key-field="Name" data={configs} columns={cfgCols}
+                            hide-checkbox-column onrowaction={handleCfgRow}></lightning-datatable>
+                    </template>
+                    <template if:true={showConfigForm}>
+                        <c-stripe-mapping-form config-name={editConfigName}
+                            onsave={handleFormSave} oncancel={handleFormCancel}></c-stripe-mapping-form>
+                    </template>
+                </lightning-tab>
+
+                <!-- Transactions -->
+                <lightning-tab label="Transactions" value="payments" onactive={handleTabActive}>
+                    <lightning-datatable key-field="Id" data={payments} columns={payCols} hide-checkbox-column></lightning-datatable>
+                </lightning-tab>
+
+                <!-- Subscriptions -->
+                <lightning-tab label="Subscriptions" value="subscriptions" onactive={handleTabActive}>
+                    <lightning-datatable key-field="Id" data={subscriptions} columns={subCols} hide-checkbox-column></lightning-datatable>
+                </lightning-tab>
+
+                <!-- Webhooks -->
+                <lightning-tab label="Webhooks" value="webhooks" onactive={handleTabActive}>
+                    <div class="slds-m-bottom_small slds-text-align_right">
+                        <lightning-button label="Retry Failed" icon-name="utility:refresh" onclick={retryWebhooks}></lightning-button>
+                    </div>
+                    <lightning-datatable key-field="Id" data={logs} columns={logCols} hide-checkbox-column></lightning-datatable>
+                </lightning-tab>
+
+            </lightning-tabset>
+        </div>
+    </lightning-card>
+</template>

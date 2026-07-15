@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ListView xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>All</fullName>
+    <columns>NAME</columns>
+    <columns>Customer_Email__c</columns>
+    <columns>Amount__c</columns>
+    <columns>Status__c</columns>
+    <columns>Payment_Type__c</columns>
+    <columns>Charge_Id__c</columns>
+    <columns>Checkout_Mode__c</columns>
+    <columns>Config_Name__c</columns>
+    <columns>CREATED_DATE</columns>
+    <columns>Customer_Name__c</columns>
+    <columns>OBJECT_ID</columns>
+    <columns>Error_Message__c</columns>
+    <filterScope>Mine</filterScope>
+    <label>All</label>
+</ListView>

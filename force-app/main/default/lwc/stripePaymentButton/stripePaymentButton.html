@@ -1,0 +1,145 @@
+<template>
+    <div class="sp-shell">
+
+        <!-- ══ HEADER ══ -->
+        <div class="sp-header">
+            <div class="sp-brand">
+                <div class="sp-logo">
+                    <svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg">
+                        <rect x="1" y="1" width="42" height="42" rx="12" fill="#ffffff"/>
+                        <path d="M24.8 18.1c0-1-.8-1.4-2.1-1.4-1.9 0-4.3.9-6 1.8v-5.2c1.9-.8 3.9-1.2 6-1.2 3.9 0 6.5 2 6.5 5.4 0 5.3-7.3 4.4-7.3 6.7 0 .9.8 1.2 2.2 1.2 2 0 4.7-.9 6.4-1.8v5.1c-2 .9-4.2 1.2-6.4 1.2-4 0-6.7-1.5-6.7-5 0-5.7 7.4-4.7 7.4-7z" fill="#635bff"/>
+                    </svg>
+                </div>
+                <div class="sp-brand-text">
+                    <span class="sp-title">Collect Payment</span>
+                    <span class="sp-sub">via Stripe</span>
+                </div>
+            </div>
+            <div class="sp-secured">
+                <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/></svg>
+                Secured
+            </div>
+        </div>
+
+        <!-- ══ BODY ══ -->
+        <div class="sp-body">
+
+            <template if:true={isLoading}>
+                <div class="sp-loading"><div class="sp-spinner"></div><p>Loading payment configuration…</p></div>
+            </template>
+
+            <template if:true={showError}>
+                <div class="sp-alert sp-alert-error" role="alert">
+                    <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+                    <span>{errorMessage}</span>
+                </div>
+            </template>
+
+            <!-- ── FORM ── -->
+            <template if:true={showForm}>
+                <template if:true={amountDisplay}>
+                    <div class="sp-hero">
+                        <div class="sp-amount-pill">
+                            <span class="sp-amount-label">Payment Amount</span>
+                            <span class="sp-amount-value">{amountDisplay}</span>
+                        </div>
+                        <template if:true={customerDisplay}>
+                            <div class="sp-customer-chip">
+                                <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"/></svg>
+                                {customerDisplay}
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
+                <template if:true={hasFields}>
+                    <div class="sp-section">
+                        <div class="sp-section-label">
+                            <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a2 2 0 012 2v.5H6V3a2 2 0 012-2zm3 3.5H5a1 1 0 00-1 1v7a1 1 0 001 1h6a1 1 0 001-1v-7a1 1 0 00-1-1z"/></svg>
+                            Payment Details
+                        </div>
+                        <div class="sp-fields-grid">
+                            <template for:each={fields} for:item="f">
+                                <div key={f.key} class="sp-field">
+                                    <lightning-input data-key={f.key} label={f.label} type={f.type}
+                                        value={f.value} read-only={f.readOnly} required={f.required}
+                                        onchange={handleFieldChange}></lightning-input>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+
+                <template if:true={showModeSelector}>
+                    <div class="sp-section">
+                        <div class="sp-section-label">
+                            <svg viewBox="0 0 16 16" fill="currentColor"><path d="M6 1a1 1 0 000 2h4a1 1 0 000-2H6zM1 6a1 1 0 011-1h12a1 1 0 011 1v8a1 1 0 01-1 1H2a1 1 0 01-1-1V6z"/></svg>
+                            Payment Options
+                        </div>
+                        <div class="sp-options-grid">
+                            <lightning-combobox label="Checkout Mode" value={checkoutMode}
+                                options={availableModes} onchange={handleModeChange}></lightning-combobox>
+                        </div>
+                    </div>
+                </template>
+
+                <template if:true={errorMessage}>
+                    <div class="sp-alert sp-alert-error sp-mt"><span>{errorMessage}</span></div>
+                </template>
+            </template>
+
+            <!-- ── PAY (embedded / custom) ── -->
+            <template if:true={showPay}>
+                <div class="sp-pay-note">
+                    <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/></svg>
+                    Complete the secure payment in the window below.
+                </div>
+                <template if:true={errorMessage}>
+                    <div class="sp-alert sp-alert-error sp-mt"><span>{errorMessage}</span></div>
+                </template>
+            </template>
+
+            <!-- ── LINK RESULT ── -->
+            <template if:true={showLink}>
+                <div class="sp-result">
+                    <div class="sp-result-head">
+                        <div class="sp-check">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                        </div>
+                        <span class="sp-result-title">Payment link ready</span>
+                    </div>
+                    <div class="sp-url-block">
+                        <span class="sp-url-label">Share this secure link with the customer</span>
+                        <div class="sp-url-row">
+                            <input type="text" data-id="pay-url" readonly value={hostedUrl} class="sp-url-input" title="Click to select"/>
+                            <button class="sp-copy-btn" onclick={handleCopyLink} title="Copy link">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                                Copy
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <!-- ══ FOOTER ══ -->
+        <template if:false={showPay}>
+            <div class="sp-footer">
+                <lightning-button label="Cancel" onclick={handleClose} class="sp-btn-cancel"></lightning-button>
+                <div class="sp-footer-right">
+                    <template if:true={showForm}>
+                        <lightning-button variant="brand" label={payLabel} icon-name={payIcon}
+                            onclick={handlePay} class="sp-btn-primary"></lightning-button>
+                    </template>
+                </div>
+            </div>
+        </template>
+
+        <!-- Iframe popup: Stripe runs outside Lightning Web Security -->
+        <template if:true={showPopup}>
+            <c-stripe-payment-popup publishable-key={publishableKey} client-secret={clientSecret}
+                oncomplete={handleChildSuccess} onfailure={handleChildFailure}
+                onclose={handleChildClose}></c-stripe-payment-popup>
+        </template>
+    </div>
+</template>

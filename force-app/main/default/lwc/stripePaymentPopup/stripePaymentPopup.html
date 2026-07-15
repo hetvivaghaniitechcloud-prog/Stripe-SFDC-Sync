@@ -1,0 +1,32 @@
+<template>
+    <template if:true={showBackdrop}>
+        <div class="sp-backdrop" onclick={handleCancel}></div>
+    </template>
+    <div class={modalClass} role="dialog" aria-modal="true">
+        <template if:true={showHeader}>
+            <div class="sp-head">
+                <template if:true={showCancel}>
+                    <button class="sp-cancel" onclick={handleCancel} title="Cancel">
+                        <lightning-icon icon-name="utility:close" size="x-small" variant="inverse"></lightning-icon>
+                        <span>Cancel</span>
+                    </button>
+                </template>
+                <template if:false={showCancel}><span></span></template>
+                <span class="sp-powered">Secured by <strong>Stripe</strong></span>
+            </div>
+        </template>
+
+        <div class="sp-body">
+            <template if:true={loading}>
+                <div class="sp-loading">
+                    <lightning-spinner alternative-text="Loading payment options" size="medium"></lightning-spinner>
+                    <p>Loading secure payment…</p>
+                </div>
+            </template>
+            <template if:true={error}>
+                <div class="sp-error" role="alert">{error}</div>
+            </template>
+            <iframe class="sp-frame" src={iframeUrl} title="Secure Payment" allow="payment *"></iframe>
+        </div>
+    </div>
+</template>

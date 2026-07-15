@@ -1,0 +1,22 @@
+<template>
+    <div class="slds-p-around_small">
+        <template if:true={loading}>
+            <div class="slds-align_absolute-center slds-p-vertical_large">
+                <lightning-spinner alternative-text="Loading payment form" size="medium"></lightning-spinner>
+            </div>
+        </template>
+        <template if:true={error}>
+            <div class="slds-text-color_error slds-p-bottom_small" role="alert">{error}</div>
+        </template>
+
+        <div class="stripe-payment-element"></div>
+
+        <div class="slds-m-top_medium slds-grid slds-grid_align-end">
+            <lightning-button label="Cancel" class="slds-m-right_x-small" onclick={handleClose}></lightning-button>
+            <lightning-button variant="brand" label="Pay" disabled={payDisabled} onclick={handlePay}></lightning-button>
+        </div>
+        <template if:true={processing}>
+            <div class="slds-text-body_small slds-text-color_weak slds-m-top_x-small">Processing payment…</div>
+        </template>
+    </div>
+</template>

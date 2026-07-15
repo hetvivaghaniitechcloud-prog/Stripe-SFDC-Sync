@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">
+    <customSettingsType>List</customSettingsType>
+    <description>Object-agnostic Stripe payment configuration. Each record maps a Salesforce object + payment context to Stripe parameters via pipe-encoded field mappings. Editable from the Stripe Setup UI at runtime - no deployment needed.</description>
+    <enableFeeds>false</enableFeeds>
+    <label>Stripe Payment Config</label>
+    <visibility>Protected</visibility>
+</CustomObject>

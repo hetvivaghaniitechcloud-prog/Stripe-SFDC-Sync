@@ -1,0 +1,23 @@
+<template>
+    <div class="slds-form-element">
+        <template if:true={label}>
+            <label class="slds-form-element__label">{label}</label>
+        </template>
+        <div class="slds-form-element__control">
+            <div class="sc-wrap">
+                <input type="text" class="slds-input" value={text} placeholder={placeholder}
+                    onfocus={handleFocus} oninput={handleInput} onblur={handleBlur} autocomplete="off" />
+                <template if:true={hasResults}>
+                    <ul class="sc-list" role="listbox">
+                        <template for:each={filtered} for:item="o">
+                            <li key={o.value} data-value={o.value} class="sc-item" role="option"
+                                onmousedown={handleSelect}>
+                                <span class="sc-label">{o.label}</span>
+                            </li>
+                        </template>
+                    </ul>
+                </template>
+            </div>
+        </div>
+    </div>
+</template>

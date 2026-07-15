@@ -1,0 +1,55 @@
+.sp-backdrop {
+    position: fixed; inset: 0; background: rgba(13, 24, 33, 0.55);
+    backdrop-filter: blur(2px); z-index: 9000;
+}
+.sp-modal {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 460px; max-width: calc(100vw - 24px); max-height: calc(100vh - 48px);
+    background: #fff; border-radius: 18px; z-index: 9001; display: flex; flex-direction: column;
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.35); overflow: hidden;
+    animation: sp-pop .22s ease both;
+}
+@keyframes sp-pop { from { opacity: 0; transform: translate(-50%, -46%) scale(.97); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+
+/* inline mode — just the Stripe iframe, no wrapper chrome (Stripe has its own header) */
+.sp-inline {
+    position: static; transform: none; top: auto; left: auto;
+    width: 100%; max-width: 100%; max-height: none;
+    box-shadow: none; border: none; border-radius: 0; overflow: visible;
+    animation: none;
+}
+.sp-inline .sp-body { overflow: visible; }
+
+.sp-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: .85rem 1.1rem; background: linear-gradient(135deg, #635bff 0%, #0a2540 100%); color: #fff;
+}
+.sp-cancel {
+    display: inline-flex; align-items: center; gap: .35rem; background: rgba(255,255,255,.18);
+    border: none; color: #fff; font-weight: 700; font-size: .85rem; padding: .35rem .7rem; border-radius: 999px; cursor: pointer;
+    /* force the close glyph white (variant=inverse alone renders gray here) */
+    --slds-c-icon-color-foreground-default: #ffffff;
+    --sds-c-icon-color-foreground-default: #ffffff;
+    --slds-c-icon-color-foreground: #ffffff;
+}
+.sp-cancel lightning-icon { --slds-c-icon-color-foreground-default: #ffffff; }
+.sp-cancel:hover { background: rgba(255,255,255,.3); }
+.sp-powered { font-size: .82rem; opacity: .95; }
+.sp-powered strong { font-weight: 800; }
+
+.sp-amount { text-align: center; font-size: 1.6rem; font-weight: 900; color: #0a2540; padding: .8rem 1rem .2rem; }
+
+/* body grows with the iframe; when the modal hits its screen-height cap, it scrolls */
+.sp-body { position: relative; flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+/* height is set dynamically from the iframe's reported content height (setFrameHeight) */
+.sp-frame { width: 100%; height: 320px; border: 0; display: block; transition: height .15s ease; }
+.sp-loading { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .6rem; color: #5b6b63; background: #fff; }
+.sp-error { padding: 1rem 1.2rem; color: #b00020; font-weight: 600; }
+
+.sp-foot { display: flex; align-items: center; gap: .4rem; padding: .6rem 1rem; border-top: 1px solid #eef1f4; color: #6b7785; font-size: .74rem; }
+
+@media (max-width: 520px) {
+    .sp-modal { width: 100%; max-width: 100%; height: 100%; max-height: 100%; top: 0; left: 0; transform: none; border-radius: 0; }
+    @keyframes sp-pop { from { opacity: 0; } to { opacity: 1; } }
+    .sp-modal { animation: none; }
+}

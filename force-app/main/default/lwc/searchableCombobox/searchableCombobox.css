@@ -1,0 +1,9 @@
+.sc-wrap { position: relative; }
+.sc-list {
+    position: absolute; z-index: 9000; left: 0; right: 0; top: calc(100% + 2px);
+    max-height: 240px; overflow-y: auto; background: #fff; border: 1px solid #d8dde6;
+    border-radius: 6px; box-shadow: 0 4px 14px rgba(0,0,0,.16); margin: 0; padding: 4px 0; list-style: none;
+}
+.sc-item { padding: .5rem .8rem; cursor: pointer; font-size: .85rem; color: #16325c; }
+.sc-item:hover { background: #f3f6f9; }
+.sc-label { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

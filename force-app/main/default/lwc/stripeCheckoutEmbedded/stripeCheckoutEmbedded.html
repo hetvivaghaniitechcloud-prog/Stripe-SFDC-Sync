@@ -1,0 +1,16 @@
+<template>
+    <div class="slds-p-around_small">
+        <template if:true={loading}>
+            <div class="slds-align_absolute-center slds-p-vertical_large">
+                <lightning-spinner alternative-text="Loading secure checkout" size="medium"></lightning-spinner>
+            </div>
+        </template>
+        <template if:true={error}>
+            <div class="slds-text-color_error slds-p-around_small" role="alert">{error}</div>
+        </template>
+        <div class="stripe-embedded-container"></div>
+        <div class="slds-m-top_small slds-text-align_right">
+            <lightning-button label="Cancel" onclick={handleClose}></lightning-button>
+        </div>
+    </div>
+</template>

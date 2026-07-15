@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Secure Payment</title>
+    <script src="https://js.stripe.com/v3/"></script>
+    <style>
+        html, body { margin: 0; padding: 0; height: auto; overflow: hidden; background: transparent; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+        #checkout { padding: 8px; }
+        #msg { padding: 16px; color: #b00; font-size: 14px; }
+        #pay { display: none; margin: 12px; padding: 12px 18px; width: calc(100% - 24px); border: 0; border-radius: 8px;
+               background: #635bff; color: #fff; font-weight: 700; font-size: 15px; cursor: pointer; }
+        #pay:disabled { opacity: .6; cursor: default; }
+    </style>
+</head>
+<body>
+    <div id="checkout"></div>
+    <button id="pay" type="button">Pay</button>
+    <div id="msg" style="display:none"></div>
+    <script>
+        (function () {
+            function post(m) { try { parent.postMessage(m, '*'); } catch (e) {} }
+            function fail(t) { var e = document.getElementById('msg'); e.style.display = 'block'; e.textContent = t; post({ type: 'stripe_error', message: t }); }
+            // Report our content height so the parent can size the iframe to fit (no inner scroll).
+            var lastH = 0;
+            // Measure the BOTTOM of the actual content (not body/documentElement scrollHeight,
+            // which reflect the iframe viewport and cause an infinite grow loop).
+            function measure() {
+                var max = 0, ids = ['checkout', 'pay', 'msg'];
+                for (var i = 0; i < ids.length; i++) {
+                    var el = document.getElementById(ids[i]);
+                    if (el) { var b = el.getBoundingClientRect().bottom; if (b > max) max = b; }
+                }
+                return Math.ceil(max);
+            }
+            function reportHeight() {
+                var h = measure();
+                if (h && Math.abs(h - lastH) > 2) { lastH = h; post({ type: 'stripe_height', height: h + 8 }); }
+            }
+            window.addEventListener('resize', reportHeight);
+            if (window.ResizeObserver) {
+                try {
+                    var ro = new ResizeObserver(reportHeight);
+                    ro.observe(document.body);
+                    ro.observe(document.documentElement);
+                    var c = document.getElementById('checkout'); if (c) ro.observe(c);
+                } catch (e) {}
+            }
+            // Keep reporting for late layout changes (address form expands, validation, wallets).
+            setInterval(reportHeight, 500);
+            try {
+                // Redirect-based methods (e.g. UPI) send the customer away and back to our
+                // return_url, which is THIS page with ?stripe_return=1.
+                var _q = new URLSearchParams(location.search);
+                if (_q.get('stripe_return') === '1') {
+                    // Still in the iframe? tell the parent LWC to show its thank-you.
+                    post({ type: 'stripe_complete' });
+                    // Redirect methods (UPI) complete in a separate Stripe tab that lands here.
+                    // The main donation tab already shows the thank-you, so this leftover tab
+                    // just confirms success and closes (auto if the browser allows it).
+                    if (window.top === window.self) {
+                        var closeIt = function () { try { window.close(); } catch (e) {} };
+                        closeIt();                       // try to close instantly (script-opened tabs)
+                        document.body.innerHTML =
+                            '<div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;text-align:center;padding:56px 20px;color:#16241d">'
+                          + '<div style="font-size:48px;line-height:1">✅</div>'
+                          + '<h2 style="margin:14px 0 6px;font-weight:800">Payment successful</h2>'
+                          + '<p style="color:#5b6b63;margin:0 0 18px">Your payment is complete. You can safely close this tab.</p>'
+                          + '<button id="cw" style="border:0;border-radius:8px;background:#0e7c84;color:#fff;font-weight:700;'
+                          + 'font-size:15px;padding:12px 22px;cursor:pointer">Close tab</button></div>';
+                        document.body.style.overflow = 'auto';
+                        var b = document.getElementById('cw'); if (b) b.addEventListener('click', closeIt);
+                        setTimeout(closeIt, 300);        // retry (some browsers need a beat)
+                    }
+                    return;
+                }
+
+                var p = new URLSearchParams(location.hash.slice(1));
+                var pk = p.get('pk'), cs = p.get('cs'), ret = p.get('ret') || location.href;
+                if (!pk || !cs) { fail('Missing payment session.'); return; }
+                if (!window.Stripe) { fail('Stripe.js failed to load.'); return; }
+                var stripe = window.Stripe(pk);
+
+                if (cs.indexOf('cs_') === 0) {
+                    // ── Embedded Checkout (Checkout Session client_secret) ──
+                    stripe.initEmbeddedCheckout({
+                        clientSecret: cs,
+                        onComplete: function () { post({ type: 'stripe_complete' }); }
+                    }).then(function (checkout) {
+                        checkout.mount('#checkout');
+                        post({ type: 'stripe_ready' });
+                    }).catch(function (e) { fail((e && e.message) || 'Could not start checkout.'); });
+                } else {
+                    // ── Payment Element (PaymentIntent / SetupIntent / Subscription secret) ──
+                    var elements = stripe.elements({ clientSecret: cs });
+                    var pe = elements.create('payment');
+                    pe.mount('#checkout');
+                    post({ type: 'stripe_ready' });
+                    var btn = document.getElementById('pay');
+                    btn.style.display = 'block';
+                    btn.addEventListener('click', function () {
+                        btn.disabled = true;
+                        stripe.confirmPayment({
+                            elements: elements,
+                            confirmParams: { return_url: ret },
+                            redirect: 'if_required'
+                        }).then(function (result) {
+                            if (result.error) { fail(result.error.message); btn.disabled = false; }
+                            else { post({ type: 'stripe_complete' }); }
+                        });
+                    });
+                }
+            } catch (e) { fail((e && e.message) || 'Unexpected error.'); }
+        })();
+    </script>
+</body>
+</html>

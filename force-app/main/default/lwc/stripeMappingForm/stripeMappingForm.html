@@ -1,0 +1,186 @@
+<template>
+    <div class="mf-wrap">
+        <div class="slds-grid slds-grid_align-spread slds-grid_vertical-align-center slds-m-bottom_small">
+            <h2 class="slds-text-heading_small">{title}</h2>
+            <lightning-button label="← Back to list" onclick={handleCancel}></lightning-button>
+        </div>
+
+        <!-- BASIC CONFIG -->
+        <div class="mf-card">
+            <p class="mf-card-title">📝 Basic Configuration</p>
+            <lightning-layout multiple-rows>
+                <lightning-layout-item size="4" padding="around-small">
+                    <lightning-input label="Config Name" data-field="Name" value={formData.Name} required
+                        placeholder="e.g. Opportunity_Booking" onchange={handleBasic}></lightning-input>
+                </lightning-layout-item>
+                <lightning-layout-item size="4" padding="around-small">
+                    <c-searchable-combobox label="Source Object" field-name="Source_Object" value={formData.Source_Object}
+                        options={objectOptions} placeholder="Search objects…" onchange={handleObjectChange}></c-searchable-combobox>
+                </lightning-layout-item>
+                <lightning-layout-item size="4" padding="around-small">
+                    <lightning-input label="Quick Action Name" data-field="QuickActionName" value={formData.QuickActionName}
+                        placeholder="e.g. Collect_Payment" onchange={handleBasic}></lightning-input>
+                </lightning-layout-item>
+                <lightning-layout-item size="3" padding="around-small">
+                    <lightning-combobox label="Checkout Mode" data-field="Checkout_Mode" value={formData.Checkout_Mode}
+                        options={modeOptions} onchange={handleBasic}></lightning-combobox>
+                </lightning-layout-item>
+                <lightning-layout-item size="3" padding="around-small">
+                    <lightning-combobox label="Payment Type" data-field="Payment_Type" value={formData.Payment_Type}
+                        options={typeOptions} onchange={handleBasic}></lightning-combobox>
+                </lightning-layout-item>
+                <lightning-layout-item size="3" padding="around-small">
+                    <lightning-combobox label="Currency" data-field="Currency" value={formData.Currency}
+                        options={currencyOptions} onchange={handleBasic}></lightning-combobox>
+                </lightning-layout-item>
+                <template if:true={isRecurring}>
+                    <lightning-layout-item size="3" padding="around-small">
+                        <lightning-input label="Price Id (recurring)" data-field="Price_Id" value={formData.Price_Id}
+                            placeholder="price_…" onchange={handleBasic}></lightning-input>
+                    </lightning-layout-item>
+                    <lightning-layout-item size="3" padding="around-small">
+                        <lightning-input type="number" label="Trial Days" data-field="Trial_Days" value={formData.Trial_Days}
+                            onchange={handleBasic}></lightning-input>
+                    </lightning-layout-item>
+                </template>
+                <lightning-layout-item size="3" padding="around-small">
+                    <lightning-input type="toggle" label="Active" data-field="Is_Active" checked={formData.Is_Active} onchange={handleBasic}></lightning-input>
+                </lightning-layout-item>
+                <lightning-layout-item size="3" padding="around-small">
+                    <lightning-input type="toggle" label="Send Notification" data-field="Notification" checked={formData.Notification} onchange={handleBasic}></lightning-input>
+                </lightning-layout-item>
+                <lightning-layout-item size="3" padding="around-small">
+                    <lightning-input type="toggle" label="Guest (Community) Enabled" data-field="Guest_Enabled" checked={formData.Guest_Enabled} onchange={handleBasic}></lightning-input>
+                </lightning-layout-item>
+                <lightning-layout-item size="3" padding="around-small">
+                    <lightning-input type="toggle" label="Collect Billing Address" field-level-help="Required for India export accounts. Stripe collects the full name + address at checkout." data-field="Collect_Billing_Address" checked={formData.Collect_Billing_Address} onchange={handleBasic}></lightning-input>
+                </lightning-layout-item>
+            </lightning-layout>
+        </div>
+
+        <!-- FIELD MAPPING -->
+        <div class="mf-card">
+            <p class="mf-card-title">🔀 Field Mapping</p>
+            <p class="slds-text-body_small slds-text-color_weak slds-m-bottom_x-small">
+                Click <strong>Edit</strong> on a row to set its source (record field, hardcoded, or user input), visibility, order and label.
+                <strong>Pass to Stripe</strong> sends the value as Stripe <code>metadata</code>.
+            </p>
+
+            <div class="mf-thead">
+                <span>Parameter</span><span>Source</span><span>Visible</span><span>Required</span><span>Order</span><span>Pass</span><span></span>
+            </div>
+
+            <template for:each={coreRows} for:item="r">
+                <div key={r.key} class="mf-rowblock">
+                    <div class="mf-row" data-key={r.key} onclick={handleExpand}>
+                        <span class="mf-param"><span class="mf-icon">{r.icon}</span> <strong>{r.label}</strong><small>{r.param}</small></span>
+                        <span><span class={r.sourceBadgeClass}>{r.sourceBadge}</span></span>
+                        <span><span class={r.visibleBadgeClass}>{r.visibleBadge}</span></span>
+                        <span><span class={r.requiredBadgeClass}>{r.requiredBadge}</span></span>
+                        <span>{r.order}</span>
+                        <span><template if:true={r.passToGateway}><span class="b-pass">Pass</span></template></span>
+                        <span><lightning-icon icon-name={r.expandIcon} size="x-small"></lightning-icon></span>
+                    </div>
+                    <template if:true={r.expanded}>
+                        <div class="mf-editor">
+                            <div class="mf-e-grid">
+                                <lightning-combobox label="Source" data-key={r.key} value={r.sourceType} options={sourceOptions} onchange={handleSourceType}></lightning-combobox>
+                                <template if:true={r.isField}>
+                                    <c-searchable-combobox label="Record Field / path" field-name={r.key} value={r.value}
+                                        options={fieldOptions} placeholder="Search fields or type a path…" onchange={handleFieldPick}></c-searchable-combobox>
+                                </template>
+                                <template if:true={r.isHard}>
+                                    <lightning-input label="Hardcoded Value" data-key={r.key} value={r.value} onchange={handleHardcoded}></lightning-input>
+                                </template>
+                                <lightning-input label="Label Override" data-key={r.key} value={r.labelOverride} onchange={handleLabel}></lightning-input>
+                                <lightning-input type="number" label="Order" data-key={r.key} value={r.order} onchange={handleOrder}></lightning-input>
+                            </div>
+                            <div class="mf-e-toggles">
+                                <lightning-input type="toggle" label="Visible in UI" data-key={r.key} checked={r.visible} onchange={handleVisible}></lightning-input>
+                                <lightning-input type="toggle" label="Required" data-key={r.key} checked={r.required} onchange={handleRequired}></lightning-input>
+                                <lightning-input type="toggle" label="Read Only" data-key={r.key} checked={r.readOnly} onchange={handleReadOnly}></lightning-input>
+                                <lightning-input type="toggle" label="Pass to Stripe (metadata)" data-key={r.key} checked={r.passToGateway} onchange={handlePass}></lightning-input>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </template>
+
+            <button class="mf-udf-toggle" onclick={toggleUdf}>{udfToggleLabel}</button>
+            <template if:true={showUdf}>
+                <template for:each={udfRows} for:item="r">
+                    <div key={r.key} class="mf-rowblock">
+                        <div class="mf-row" data-key={r.key} onclick={handleExpand}>
+                            <span class="mf-param"><span class="mf-icon">{r.icon}</span> <strong>{r.label}</strong><small>{r.param}</small></span>
+                            <span><span class={r.sourceBadgeClass}>{r.sourceBadge}</span></span>
+                            <span><span class={r.visibleBadgeClass}>{r.visibleBadge}</span></span>
+                            <span><span class={r.requiredBadgeClass}>{r.requiredBadge}</span></span>
+                            <span>{r.order}</span>
+                            <span><template if:true={r.passToGateway}><span class="b-pass">Pass</span></template></span>
+                            <span><lightning-icon icon-name={r.expandIcon} size="x-small"></lightning-icon></span>
+                        </div>
+                        <template if:true={r.expanded}>
+                            <div class="mf-editor">
+                                <div class="mf-e-grid">
+                                    <lightning-combobox label="Source" data-key={r.key} value={r.sourceType} options={sourceOptions} onchange={handleSourceType}></lightning-combobox>
+                                    <template if:true={r.isField}>
+                                        <c-searchable-combobox label="Record Field / path" field-name={r.key} value={r.value}
+                                            options={fieldOptions} placeholder="Search fields…" onchange={handleFieldPick}></c-searchable-combobox>
+                                    </template>
+                                    <template if:true={r.isHard}>
+                                        <lightning-input label="Hardcoded Value" data-key={r.key} value={r.value} onchange={handleHardcoded}></lightning-input>
+                                    </template>
+                                    <lightning-input label="Label Override" data-key={r.key} value={r.labelOverride} onchange={handleLabel}></lightning-input>
+                                    <lightning-input type="number" label="Order" data-key={r.key} value={r.order} onchange={handleOrder}></lightning-input>
+                                </div>
+                                <div class="mf-e-toggles">
+                                    <lightning-input type="toggle" label="Visible in UI" data-key={r.key} checked={r.visible} onchange={handleVisible}></lightning-input>
+                                    <lightning-input type="toggle" label="Required" data-key={r.key} checked={r.required} onchange={handleRequired}></lightning-input>
+                                    <lightning-input type="toggle" label="Read Only" data-key={r.key} checked={r.readOnly} onchange={handleReadOnly}></lightning-input>
+                                    <lightning-input type="toggle" label="Pass to Stripe (metadata)" data-key={r.key} checked={r.passToGateway} onchange={handlePass}></lightning-input>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+            </template>
+        </div>
+
+        <!-- PAYMENT FORM OPTIONS -->
+        <div class="mf-card">
+            <p class="mf-card-title">⚙️ Payment Form Options</p>
+            <lightning-layout multiple-rows>
+                <lightning-layout-item size="4" padding="around-small">
+                    <lightning-input type="toggle" label="Show Checkout Mode selector" data-opt="showCheckoutMode" checked={optShowCheckoutMode} onchange={handleOption}></lightning-input>
+                </lightning-layout-item>
+                <lightning-layout-item size="4" padding="around-small">
+                    <lightning-input type="toggle" label="Show Notification toggle" data-opt="showNotification" checked={optShowNotification} onchange={handleOption}></lightning-input>
+                </lightning-layout-item>
+                <lightning-layout-item size="4" padding="around-small">
+                    <lightning-input type="toggle" label="Show Payment Type (one-time / recurring)" data-opt="showPaymentType" checked={optShowPaymentType} onchange={handleOption}></lightning-input>
+                </lightning-layout-item>
+            </lightning-layout>
+        </div>
+
+        <!-- POST-PAYMENT ACTIONS -->
+        <div class="mf-card">
+            <p class="mf-card-title">✅ Post-Payment Actions <small class="slds-text-color_weak">— run after a confirmed payment (via webhook)</small></p>
+            <lightning-layout multiple-rows>
+                <lightning-layout-item size="4" padding="around-small">
+                    <lightning-input label="Post-Success Field" data-field="Post_Success" value={formData.Post_Success} placeholder="e.g. StageName" onchange={handleBasic}></lightning-input>
+                </lightning-layout-item>
+                <lightning-layout-item size="4" padding="around-small">
+                    <lightning-input label="Update To Value" data-field="Post_Value" value={formData.Post_Value} placeholder="e.g. Closed Won" onchange={handleBasic}></lightning-input>
+                </lightning-layout-item>
+                <lightning-layout-item size="4" padding="around-small">
+                    <lightning-input label="Trigger Flow (API Name)" data-field="Post_Flow" value={formData.Post_Flow} placeholder="e.g. Send_Receipt" onchange={handleBasic}></lightning-input>
+                </lightning-layout-item>
+            </lightning-layout>
+        </div>
+
+        <div class="slds-grid slds-grid_align-end slds-m-top_medium">
+            <lightning-button label="Cancel" class="slds-m-right_x-small" onclick={handleCancel}></lightning-button>
+            <lightning-button variant="brand" label={saveLabel} onclick={handleSave} disabled={isSaving}></lightning-button>
+        </div>
+    </div>
+</template>

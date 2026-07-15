@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Checkout_Mode__c</fullName>
+    <label>Checkout Mode</label>
+    <required>false</required>
+    <trackTrending>false</trackTrending>
+    <type>Picklist</type>
+    <valueSet>
+        <restricted>true</restricted>
+        <valueSetDefinition>
+            <sorted>false</sorted>
+            <value>
+                <fullName>HOSTED</fullName>
+                <default>false</default>
+                <label>HOSTED</label>
+            </value>
+            <value>
+                <fullName>EMBEDDED</fullName>
+                <default>false</default>
+                <label>EMBEDDED</label>
+            </value>
+            <value>
+                <fullName>CUSTOM</fullName>
+                <default>false</default>
+                <label>CUSTOM</label>
+            </value>
+            <value>
+                <fullName>LINK</fullName>
+                <default>false</default>
+                <label>LINK</label>
+            </value>
+        </valueSetDefinition>
+    </valueSet>
+</CustomField>

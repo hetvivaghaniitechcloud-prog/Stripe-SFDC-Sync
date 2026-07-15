@@ -1,0 +1,59 @@
+<template>
+    <div class="wrap">
+        <div class="head">
+            <h2>{cardTitle}</h2>
+            <button class="refresh" onclick={refresh} title="Refresh">↻</button>
+        </div>
+
+        <template if:true={loading}>
+            <div class="state"><div class="loader"></div><p>Loading your subscriptions…</p></div>
+        </template>
+
+        <template if:true={error}>
+            <div class="state err">{error}</div>
+        </template>
+
+        <template if:true={isEmpty}>
+            <div class="state muted">No recurring subscriptions found.</div>
+        </template>
+
+        <template if:true={hasSubs}>
+            <ul class="list">
+                <template for:each={subs} for:item="s">
+                    <li key={s.id} class="row">
+                        <div class="info">
+                            <div class="amt">{s.amountLabel}</div>
+                            <div class="sub">{s.subLine}</div>
+                        </div>
+                        <div class="right">
+                            <span class={s.badgeClass}>{s.statusLabel}</span>
+                            <div class="actions">
+                                <template if:true={s.busy}>
+                                    <span class="working">Working…</span>
+                                </template>
+                                <template if:false={s.busy}>
+                                    <template if:true={s.confirming}>
+                                        <span class="confirm-txt">Cancel this subscription?</span>
+                                        <button class="btn btn_danger" data-sub={s.subscriptionId} onclick={confirmCancel}>Yes, cancel</button>
+                                        <button class="btn btn_ghost" onclick={keepIt}>Keep</button>
+                                    </template>
+                                    <template if:false={s.confirming}>
+                                        <template if:true={s.canPause}>
+                                            <button class="btn btn_soft" data-sub={s.subscriptionId} onclick={handlePause}>Pause</button>
+                                        </template>
+                                        <template if:true={s.canResume}>
+                                            <button class="btn btn_primary" data-sub={s.subscriptionId} onclick={handleResume}>Resume</button>
+                                        </template>
+                                        <template if:true={s.canCancel}>
+                                            <button class="btn btn_ghost" data-sub={s.subscriptionId} onclick={askCancel}>Cancel</button>
+                                        </template>
+                                    </template>
+                                </template>
+                            </div>
+                        </div>
+                    </li>
+                </template>
+            </ul>
+        </template>
+    </div>
+</template>

@@ -1,0 +1,138 @@
+<template>
+    <div class="wrap">
+        <div class="card">
+            <!-- gift summary rail -->
+            <aside class="rail">
+                <p class="eyebrow">Your gift</p>
+                <div class="amt">{amountDisplay}</div>
+                <div class="freq">{frequencyLabel}</div>
+                <ul class="benefits">
+                    <li><lightning-icon icon-name="utility:check" size="xx-small" variant="inverse"></lightning-icon> Instant email receipt</li>
+                    <li><lightning-icon icon-name="utility:check" size="xx-small" variant="inverse"></lightning-icon> 100% funds our programs</li>
+                    <li><lightning-icon icon-name="utility:check" size="xx-small" variant="inverse"></lightning-icon> Cancel recurring anytime</li>
+                </ul>
+                <div class="rail-foot"><lightning-icon icon-name="utility:lock" size="xx-small" variant="inverse"></lightning-icon> Secured by Stripe</div>
+            </aside>
+
+            <!-- main -->
+            <section class="main">
+                <template if:true={isForm}>
+                    <ol class="stepper">
+                        <template for:each={steps} for:item="s">
+                            <li key={s.n} class={s.cls}><span class="dot">{s.n}</span><span class="lbl">{s.label}</span></li>
+                        </template>
+                    </ol>
+
+                    <!-- STEP 1 amount + frequency -->
+                    <template if:true={isStep1}>
+                        <div class="panel anim">
+                            <h2>Choose your gift</h2>
+                            <div class="seg-wrap">
+                                <template for:each={freqButtons} for:item="f">
+                                    <button key={f.key} data-key={f.key} class={f.class} onclick={selectFreq}>{f.label}</button>
+                                </template>
+                            </div>
+                            <div class="pills">
+                                <template for:each={presetButtons} for:item="p">
+                                    <button key={p.value} data-value={p.value} class={p.class} onclick={selectPreset}>{p.label}</button>
+                                </template>
+                            </div>
+                            <div class="cc-custom">
+                                <label class="cc-custom-lbl">Or enter a custom amount</label>
+                                <div class="gm-money"><span>$</span><input type="number" min="1" max="100000" step="0.01" value={customAmount} oninput={handleCustom} placeholder="0.00" /></div>
+                            </div>
+                            <template if:true={recurringNote}>
+                                <p class="dur-sum">{recurringNote}</p>
+                            </template>
+                        </div>
+                    </template>
+
+                    <!-- STEP 2 details -->
+                    <template if:true={isStep2}>
+                        <div class="panel anim">
+                            <h2>Your details</h2>
+                            <div class="two">
+                                <lightning-input label="First name" data-field="firstName" value={firstName} onchange={handleField} required></lightning-input>
+                                <lightning-input label="Last name" data-field="lastName" value={lastName} onchange={handleField} required></lightning-input>
+                            </div>
+                            <lightning-input type="email" label="Email" data-field="email" value={email} onchange={handleField} required></lightning-input>
+                            <lightning-input label="Designate to (optional)" data-field="designation" value={designation} onchange={handleField}></lightning-input>
+                        </div>
+                    </template>
+
+                    <!-- STEP 3 — payment (inline: summary left, pay right) -->
+                    <template if:true={isStep3}>
+                        <div class="panel anim">
+                            <div class="pay-head">
+                                <h2 class="pay-h2">Payment</h2>
+                                <div class="pay-head-right">
+                                    <template if:true={showViewToggle}>
+                                        <div class="view-toggle" title="Demo: switch payment display">
+                                            <template for:each={viewButtons} for:item="v">
+                                                <button key={v.key} data-key={v.key} class={v.class} onclick={switchView}>{v.label}</button>
+                                            </template>
+                                        </div>
+                                    </template>
+                                    <button class="linkback" onclick={handlePaymentClose}>← Change details</button>
+                                </div>
+                            </div>
+                            <template if:true={showInlinePay}>
+                                <c-stripe-payment-popup inline publishable-key={publishableKey} client-secret={clientSecret}
+                                    oncomplete={handlePaymentComplete} onfailure={handlePaymentFailure}
+                                    onclose={handlePaymentClose}></c-stripe-payment-popup>
+                            </template>
+                            <template if:false={isInline}>
+                                <p class="pci"><lightning-icon icon-name="utility:lock" size="xx-small"></lightning-icon> Complete your secure payment in the window.</p>
+                            </template>
+                        </div>
+                    </template>
+
+                    <template if:true={errorMessage}>
+                        <div class="err anim"><lightning-icon icon-name="utility:error" size="x-small" variant="error"></lightning-icon> {errorMessage}</div>
+                    </template>
+
+                    <template if:false={isStep3}>
+                        <div class="nav">
+                            <template if:true={isStep1}><span></span></template>
+                            <template if:false={isStep1}><button class="ghost" onclick={back}>← Back</button></template>
+                            <button class="cta" onclick={next}>Continue →</button>
+                        </div>
+                    </template>
+                </template>
+
+                <template if:true={isProcessing}>
+                    <div class="center anim">
+                        <div class="loader"></div>
+                        <h2>Preparing secure checkout…</h2>
+                        <p class="muted">Connecting to Stripe.</p>
+                    </div>
+                </template>
+
+                <template if:true={isSuccess}>
+                    <div class="center anim">
+                        <div class="checkmark"><svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="25"/><path d="M14 27l8 8 16-16"/></svg></div>
+                        <h1>{successHeading}</h1>
+                        <p class="muted">{successMessage}</p>
+                        <button class="cta" onclick={reset}>Make another gift</button>
+                    </div>
+                </template>
+            </section>
+        </div>
+
+        <!-- Easebuzz-style payment modal (iframe runs Stripe outside LWS) -->
+        <template if:true={showPopup}>
+            <!-- floating demo toggle, above the overlay, so you can switch back to inline -->
+            <template if:true={showViewToggle}>
+                <div class="view-toggle view-toggle_float" title="Demo: switch payment display">
+                    <template for:each={viewButtons} for:item="v">
+                        <button key={v.key} data-key={v.key} class={v.class} onclick={switchView}>{v.label}</button>
+                    </template>
+                </div>
+            </template>
+            <c-stripe-payment-popup publishable-key={publishableKey} client-secret={clientSecret}
+                amount-label={amountDisplay} oncomplete={handlePaymentComplete}
+                onfailure={handlePaymentFailure} onclose={handlePaymentClose}>
+            </c-stripe-payment-popup>
+        </template>
+    </div>
+</template>

@@ -1,0 +1,20 @@
+{
+  "packageDirectories": [
+    {
+      "path": "force-app",
+      "default": true,
+      "package": "Stripe SFDC Sync",
+      "versionName": "V0.1",
+      "versionNumber": "0.1.0.NEXT",
+      "versionDescription": "Stripe to Salesforce Integration"
+    }
+  ],
+  "name": "Stripe Managed package",
+  "namespace": "acxitech",
+  "sfdcLoginUrl": "https://login.salesforce.com",
+  "sourceApiVersion": "66.0",
+  "packageAliases": {
+    "Stripe SFDC Sync": "0Hoe200000001FRCAY",
+    "Stripe SFDC Sync@0.1.0-2": "04te2000000RH81AAG"
+  }
+}
