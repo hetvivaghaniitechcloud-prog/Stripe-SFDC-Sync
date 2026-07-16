@@ -154,12 +154,26 @@
                                     field-level-help="Stripe must reach this without login. Use your Experience/Force.com Site domain (…my.site.com), NOT the org login domain (…my.salesforce.com). Leave blank to use the org domain (requires the endpoint be exposed publicly)."
                                     onchange={handleCredChange}></lightning-input>
                                 <div class="slds-grid slds-grid_vertical-align-center slds-m-bottom_small">
-                                    <lightning-input class="slds-grow" label="Webhook URL" value={webhookUrl} read-only></lightning-input>
+                                    <lightning-input class="slds-grow" label="Webhook URL" value={webhookUrl} onchange={handleWebhookUrlChange}></lightning-input>
                                     <lightning-button label="Copy" icon-name="utility:copy" class="slds-m-left_x-small slds-m-top_large" onclick={copyWebhookUrl}></lightning-button>
                                 </div>
                                 <div class="slds-box slds-box_x-small slds-m-bottom_small" style="background:#f3f9ff;border-color:#c9e2ff">
                                     <p class="slds-text-body_small slds-m-bottom_x-small">✨ <strong>One-click register</strong> — since your secret key is configured, create this endpoint in Stripe automatically and store the signing secret for you.</p>
                                     <lightning-button variant="brand" label="Register Webhook in Stripe" icon-name="utility:upload" onclick={registerWebhook}></lightning-button>
+                                    <lightning-button
+                                        label="Check Webhook Connection"
+                                        icon-name="utility:check"
+                                        class="slds-m-left_x-small"
+                                        onclick={checkWebhookConnection}
+                                        disabled={webhookTestRunning}>
+                                    </lightning-button>
+
+                                    <template if:true={webhookTestRunning}>
+                                        <lightning-spinner
+                                            alternative-text="Testing webhook connection"
+                                            size="small">
+                                        </lightning-spinner>
+                                    </template>
                                     <p class="slds-text-body_small slds-text-color_weak slds-m-top_x-small">The endpoint must be reachable by Stripe — expose the Apex REST resource via a Salesforce Site (guest) so events are delivered.</p>
                                 </div>
                                 <p class="slds-text-title_caps">Events handled</p>

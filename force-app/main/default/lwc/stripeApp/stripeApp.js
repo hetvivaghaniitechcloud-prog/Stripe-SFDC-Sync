@@ -18,7 +18,11 @@ import getRecentWebhookLogs from '@salesforce/apex/StripeAdminController.getRece
 import getSObjectNames from '@salesforce/apex/StripeAdminController.getSObjectNames';
 import getObjectFields from '@salesforce/apex/StripeAdminController.getObjectFields';
 import retryFailed from '@salesforce/apex/StripeWebhookRetry.retryFailedLWC';
-
+import startWebhookConnectionTestApex from '@salesforce/apex/StripeConfigReader.startWebhookConnectionTest';
+import getDefaultWebhookBaseUrl
+    from '@salesforce/apex/StripeConfigReader.getDefaultWebhookBaseUrl';
+import checkWebhookConnectionTestApex from '@salesforce/apex/StripeConfigReader.checkWebhookConnectionTest';
+const WEBHOOK_PATH = '/services/apexrest/acxitech/stripe/webhook';
 const ENV_OPTIONS = [{ label: 'Test (Sandbox)', value: 'test' }, { label: 'Live (Production)', value: 'live' }];
 const AUTH_MODE_OPTIONS = [
     { label: 'Secret Key (Bearer) — per request', value: 'KEY' },
@@ -87,6 +91,12 @@ export default class StripeApp extends LightningElement {
     subCols = SUB_COLS;
     logCols = LOG_COLS;
     cfgCols = CFG_COLS;
+    webhookTestRunning = false;
+    webhookTestToken;
+    webhookTestCustomerId;
+    webhookTestRequestedAt;
+    webhookTestTimer;
+    webhookTestAttempts = 0;
 
     @track cred = {};
     @track credInfo = {};
@@ -100,6 +110,7 @@ export default class StripeApp extends LightningElement {
     @track logs = [];
     @track objectOptions = [];
     @track fieldOptions = [];
+    @track webhookUrl = '';
 
     connectedCallback() {
         this.loadCredentials();
@@ -132,7 +143,16 @@ export default class StripeApp extends LightningElement {
     async loadCredentials() {
         try {
             const i = JSON.parse(await getCredentialsInfo());
+
             this.credInfo = i;
+
+            let webhookBaseUrl = i.webhookBaseUrl;
+
+            // First time only
+            if (!webhookBaseUrl) {
+                webhookBaseUrl = await getDefaultWebhookBaseUrl();
+            }
+
             this.cred = {
                 environment: i.environment || 'test',
                 authMode: i.authMode || 'KEY',
@@ -141,7 +161,10 @@ export default class StripeApp extends LightningElement {
                 defaultCurrency: i.defaultCurrency || 'usd',
                 defaultProductInfo: i.defaultProductInfo,
                 hostedRedirect: i.hostedRedirect || 'newtab',
-                webhookBaseUrl: i.webhookBaseUrl,
+
+                // Default value comes from Apex
+                webhookBaseUrl: webhookBaseUrl,
+
                 successUrl: i.successUrl,
                 cancelUrl: i.cancelUrl,
                 returnUrl: i.returnUrl,
@@ -152,7 +175,14 @@ export default class StripeApp extends LightningElement {
                 customElementEnabled: i.customElementEnabled,
                 linkEnabled: i.linkEnabled
             };
-        } catch (e) { this.toast('Error', this.msg(e), 'error'); }
+
+            this.webhookUrl =
+                i.webhookUrl ||
+                this.buildWebhookUrl(webhookBaseUrl);
+
+        } catch (e) {
+            this.toast('Error', this.msg(e), 'error');
+        }
     }
 
     async testConn() {
@@ -165,15 +195,156 @@ export default class StripeApp extends LightningElement {
 
     async registerWebhook() {
         try {
-            const r = JSON.parse(await registerWebhookApex());
+            // const r = JSON.parse(await registerWebhookApex());
+            const r = JSON.parse(
+                await registerWebhookApex({
+                    webhookUrl: this.webhookUrl
+                })
+            );
             if (!r.success) throw new Error(r.message);
             this.toast('Webhook registered', 'Endpoint ' + (r.endpointId || '') + ' created in Stripe and the signing secret was saved automatically.', 'success');
-            this.loadCredentials();
+            // this.loadCredentials();
+            this.credInfo = {
+                ...this.credInfo,
+                webhookUrl: this.webhookUrl
+            };
         } catch (e) { this.toast('Registration failed', this.msg(e), 'error'); }
     }
 
+    async checkWebhookConnection() {
+        if (!this.webhookUrl) {
+            this.toast(
+                'Webhook URL Required',
+                'Enter the webhook URL first.',
+                'warning'
+            );
+            return;
+        }
+
+        if (this.webhookTestRunning) {
+            return;
+        }
+
+        try {
+            this.webhookTestRunning = true;
+            this.webhookTestAttempts = 0;
+
+            const result = JSON.parse(
+                await startWebhookConnectionTestApex({
+                    webhookUrl: this.webhookUrl
+                })
+            );
+
+            if (!result.success) {
+                throw new Error(result.message);
+            }
+
+            if (!result.pending) {
+                this.webhookTestRunning = false;
+
+                this.toast(
+                    'Webhook Not Connected',
+                    result.message,
+                    'error'
+                );
+
+                return;
+            }
+
+            this.webhookTestToken = result.token;
+            this.webhookTestCustomerId = result.customerId;
+            this.webhookTestRequestedAt = result.requestedAt;
+
+            this.toast(
+                'Webhook Test Started',
+                result.message,
+                'info'
+            );
+
+            this.scheduleWebhookStatusCheck();
+
+        } catch (error) {
+            this.webhookTestRunning = false;
+
+            this.toast(
+                'Webhook Test Failed',
+                this.msg(error),
+                'error'
+            );
+        }
+    }
+
+    scheduleWebhookStatusCheck() {
+        window.clearTimeout(this.webhookTestTimer);
+
+        this.webhookTestTimer = window.setTimeout(
+            () => this.pollWebhookTestStatus(),
+            2000
+        );
+    }
+
+    async pollWebhookTestStatus() {
+        try {
+            this.webhookTestAttempts += 1;
+
+            const result = JSON.parse(
+                await checkWebhookConnectionTestApex({
+                    testToken: this.webhookTestToken,
+                    customerId: this.webhookTestCustomerId,
+                    requestedAt: this.webhookTestRequestedAt,
+                    webhookUrl: this.webhookUrl
+                })
+            );
+
+            if (!result.success) {
+                throw new Error(result.message);
+            }
+
+            if (result.connected) {
+                this.webhookTestRunning = false;
+
+                this.toast(
+                    'Webhook Connected',
+                    result.message,
+                    'success'
+                );
+
+                return;
+            }
+
+            if (
+                result.pending &&
+                this.webhookTestAttempts < 15
+            ) {
+                this.scheduleWebhookStatusCheck();
+                return;
+            }
+
+            this.webhookTestRunning = false;
+
+            this.toast(
+                'Webhook Not Connected',
+                result.message,
+                'error'
+            );
+
+        } catch (error) {
+            this.webhookTestRunning = false;
+
+            this.toast(
+                'Webhook Test Failed',
+                this.msg(error),
+                'error'
+            );
+        }
+    }
+
+    disconnectedCallback() {
+        window.clearTimeout(this.webhookTestTimer);
+    }
+
     copyWebhookUrl() {
-        const url = this.credInfo.webhookUrl || '';
+        const url = this.webhookUrl || '';
         const el = document.createElement('textarea');
         el.value = url; document.body.appendChild(el); el.select();
         try { document.execCommand('copy'); this.toast('Copied', 'Webhook URL copied.', 'success'); }
@@ -183,19 +354,151 @@ export default class StripeApp extends LightningElement {
 
     get isKeyMode() { return this.cred.authMode !== 'NAMED_CREDENTIAL'; }
     get isNcMode() { return this.cred.authMode === 'NAMED_CREDENTIAL'; }
-    get webhookUrl() { return this.credInfo ? this.credInfo.webhookUrl : ''; }
-    handleCredChange(e) {
-        const t = e.target.type;
-        const isBool = t === 'checkbox' || t === 'toggle';
-        this.cred[e.target.dataset.field] = isBool ? e.target.checked : e.target.value;
+    // get webhookUrl() { return this.credInfo ? this.credInfo.webhookUrl : ''; }
+    handleWebhookUrlChange(event) {
+        this.webhookUrl = event.target.value.trim();
     }
+
+    handleCredChange(event) {
+        const field =
+            event.target.dataset.field;
+
+        const type =
+            event.target.type;
+
+        const isBool =
+            type === 'checkbox' ||
+            type === 'toggle';
+
+        const value =
+            isBool
+                ? event.target.checked
+                : event.target.value;
+
+        this.cred = {
+            ...this.cred,
+            [field]: value
+        };
+
+        /*
+        * Update automatically while the user edits
+        * the Webhook Base URL.
+        */
+        if (field === 'webhookBaseUrl') {
+            this.webhookUrl =
+                this.buildWebhookUrl(value);
+        }
+    }
+    
+    buildWebhookUrl(baseUrl) {
+        const normalizedBase =
+            this.normalizeWebhookBaseUrl(
+                baseUrl
+            );
+
+        if (!normalizedBase) {
+            return '';
+        }
+
+        /*
+        * Avoid adding the Apex REST path twice.
+        */
+        if (
+            normalizedBase
+                .toLowerCase()
+                .includes('/services/apexrest/')
+        ) {
+            return normalizedBase;
+        }
+
+        return `${normalizedBase}${WEBHOOK_PATH}`;
+    }
+
+    normalizeWebhookBaseUrl(baseUrl) {
+        if (!baseUrl || !baseUrl.trim()) {
+            return '';
+        }
+
+        let normalizedBase =
+            baseUrl.trim();
+
+        if (
+            !normalizedBase
+                .toLowerCase()
+                .startsWith('https://') &&
+            !normalizedBase
+                .toLowerCase()
+                .startsWith('http://')
+        ) {
+            normalizedBase =
+                `https://${normalizedBase}`;
+        }
+
+
+        normalizedBase =
+            normalizedBase.replace(/\/+$/, '');
+
+        return normalizedBase;
+    }
+
     async saveCred() {
         try {
-            const res = JSON.parse(await saveCredentials({ credJson: JSON.stringify(this.cred) }));
-            if (!res.success) throw new Error(res.message);
-            this.toast('Saved', 'Credentials saved.', 'success');
-            this.loadCredentials();
-        } catch (e) { this.toast('Error', this.msg(e), 'error'); }
+            const normalizedBaseUrl =
+                this.normalizeWebhookBaseUrl(
+                    this.cred.webhookBaseUrl
+                );
+
+            this.cred = {
+                ...this.cred,
+
+                webhookBaseUrl:
+                    normalizedBaseUrl,
+
+                /*
+                * Preserve the manually edited complete URL.
+                */
+                webhookUrl:
+                    this.webhookUrl
+                        ? this.webhookUrl.trim()
+                        : ''
+            };
+
+            const res = JSON.parse(
+                await saveCredentials({
+                    credJson:
+                        JSON.stringify(this.cred)
+                })
+            );
+
+            if (!res.success) {
+                throw new Error(
+                    res.message
+                );
+            }
+
+            this.credInfo = {
+                ...this.credInfo,
+
+                webhookBaseUrl:
+                    this.cred.webhookBaseUrl,
+
+                webhookUrl:
+                    this.cred.webhookUrl
+            };
+
+            this.toast(
+                'Saved',
+                'Credentials and webhook URL saved.',
+                'success'
+            );
+
+        } catch (e) {
+            this.toast(
+                'Error',
+                this.msg(e),
+                'error'
+            );
+        }
     }
 
     // ── Configs ──

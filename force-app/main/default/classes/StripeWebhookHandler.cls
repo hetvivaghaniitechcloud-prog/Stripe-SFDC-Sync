@@ -95,6 +95,7 @@ global without sharing class StripeWebhookHandler {
             try {
                 routeEvent(eventType, event, log.Id);
                 log.Processing_Status__c = 'Processed';
+                log.Error_Message__c = null;
             } catch (Exception ex) {
                 log.Processing_Status__c = 'Error';
                 log.Error_Message__c = ex.getMessage() + '\n' + ex.getStackTraceString();
@@ -111,7 +112,7 @@ global without sharing class StripeWebhookHandler {
                     Payload__c = payload.left(131072),
                     Signature_Verified__c = false,
                     Processing_Status__c = 'Error',
-                    Error_Message__c = ex.getMessage()
+                    Error_Message__c = ex.getMessage() + '\n' + ex.getStackTraceString()
                 );
             } catch (Exception ignore) {}
             respond(res, 200, '{"status":"error"}');
@@ -254,7 +255,9 @@ global without sharing class StripeWebhookHandler {
             // ── SetupIntent (save card / mandate) ──
             when 'setup_intent.succeeded' { handleSetupIntent(obj, 'Completed', logId); }
             when 'setup_intent.setup_failed' { handleSetupIntent(obj, 'Failed', logId); }
-
+            when 'customer.created' {
+                // Intentionally no processing.
+            }
             when else { /* every event is still logged to Stripe_Webhook_Log__c; just no state change */ }
         }
     }

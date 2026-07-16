@@ -4,8 +4,9 @@
       "path": "force-app",
       "default": true,
       "package": "Stripe SFDC Sync",
-      "versionName": "V0.1",
-      "versionNumber": "0.1.0.NEXT",
+      "versionName": "V0.5",
+      "versionNumber": "0.5.0.NEXT",
+      "ancestorVersion": "0.4.0",
       "versionDescription": "Stripe to Salesforce Integration"
     }
   ],
@@ -15,6 +16,10 @@
   "sourceApiVersion": "66.0",
   "packageAliases": {
     "Stripe SFDC Sync": "0Hoe200000001FRCAY",
-    "Stripe SFDC Sync@0.1.0-2": "04te2000000RH81AAG"
+    "Stripe SFDC Sync@0.1.0-2": "04te2000000RH81AAG",
+    "Stripe SFDC Sync@0.2.0-1": "04te2000000ROO1AAO",
+    "Stripe SFDC Sync@0.3.0-1": "04te2000000RS1pAAG",
+    "Stripe SFDC Sync@0.4.0-1": "04te2000000RSLBAA4",
+    "Stripe SFDC Sync@0.5.0-1": "04te2000000RSMnAAO"
   }
 }

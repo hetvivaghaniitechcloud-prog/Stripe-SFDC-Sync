@@ -32,6 +32,7 @@ public with sharing class StripeConfigReader {
         public String defaultProductInfo;
         public String hostedRedirect;       // 'newtab' | 'same'
         public String webhookBaseUrl;       // public Site base URL for webhook delivery
+        public String webhookUrl;
         public List<String> webhookSecrets; // whsec_… (one or more, rotation-aware)
         public String apiVersion;           // pinned Stripe-Version
         public Boolean hostedEnabled;
@@ -74,6 +75,16 @@ public with sharing class StripeConfigReader {
         public Boolean isActive;
     }
 
+    public class WebhookTestStatus {
+        @AuraEnabled public Boolean connected;
+        @AuraEnabled public Boolean pending;
+        @AuraEnabled public String token;
+        @AuraEnabled public String message;
+        @AuraEnabled public String customerId;
+        @AuraEnabled public String eventId;
+        @AuraEnabled public Datetime requestedAt;
+        @AuraEnabled public Datetime receivedAt;
+    }
     public static final String DEFAULT_API_VERSION = '2024-06-20';
 
     // ═══════════════════════ CREDENTIALS ═══════════════════════
@@ -96,6 +107,7 @@ public with sharing class StripeConfigReader {
         c.defaultProductInfo = cr.Default_Product_Info__c;
         c.hostedRedirect  = cr.Hosted_Redirect__c;
         c.webhookBaseUrl  = cr.Webhook_Base_Url__c;
+        c.webhookUrl = cr.Webhook_Url__c;
         c.webhookSecrets  = parseSecrets(isLive ? cr.Webhook_Signing_Secret_Live__c
                                                  : cr.Webhook_Signing_Secret_Test__c);
         c.apiVersion = String.isNotBlank(cr.Stripe_Api_Version__c) ? cr.Stripe_Api_Version__c : DEFAULT_API_VERSION;
@@ -135,6 +147,23 @@ public with sharing class StripeConfigReader {
         Credentials c = getCredentials();
         Boolean hasAuth = c != null && (String.isNotBlank(c.secretKey) || String.isNotBlank(c.namedCredential));
         Boolean configured = hasAuth && c != null && String.isNotBlank(c.publishableKey);
+        String webhookBaseUrl =
+            c != null && String.isNotBlank(c.webhookBaseUrl)
+                ? c.webhookBaseUrl
+                : getDefaultWebhookBaseUrl();
+
+        String webhookUrl;
+
+        if (
+            c != null &&
+            String.isNotBlank(c.webhookUrl)
+        ) {
+            webhookUrl =
+                c.webhookUrl.trim();
+        } else {
+            webhookUrl =
+                buildWebhookUrl(c);
+        }
         // NOTE: the secret key is intentionally NEVER included in this payload.
         return JSON.serialize(new Map<String, Object>{
             'isConfigured'         => configured,
@@ -162,8 +191,8 @@ public with sharing class StripeConfigReader {
             'returnUrl'            => c != null ? c.returnUrl : null,
             'logoUrl'              => c != null ? c.logoUrl : null,
             'apiTimeoutSec'        => c != null && c.apiTimeoutMs != null ? c.apiTimeoutMs / 1000 : 30,
-            'webhookBaseUrl'       => c != null ? c.webhookBaseUrl : null,
-            'webhookUrl'           => buildWebhookUrl(c)
+            'webhookBaseUrl'       =>  c != null ? c.webhookBaseUrl : null,
+            'webhookUrl'           => webhookUrl
         });
     }
 
@@ -207,6 +236,7 @@ public with sharing class StripeConfigReader {
             if (d.containsKey('defaultProductInfo'))    cr.Default_Product_Info__c = gs(d,'defaultProductInfo');
             if (d.containsKey('hostedRedirect'))        cr.Hosted_Redirect__c = gs(d,'hostedRedirect');
             if (d.containsKey('webhookBaseUrl'))        cr.Webhook_Base_Url__c = gs(d,'webhookBaseUrl');
+            if (d.containsKey('webhookUrl'))            cr.Webhook_Url__c = gs(d, 'webhookUrl');
             if (d.containsKey('apiTimeoutSec') && d.get('apiTimeoutSec') != null)
                 cr.Api_Timeout__c = Decimal.valueOf(String.valueOf(d.get('apiTimeoutSec'))) * 1000;
             upsert cr;
@@ -229,17 +259,417 @@ public with sharing class StripeConfigReader {
             });
         } catch (Exception e) { return err(e.getMessage()); }
     }
+    
+    @AuraEnabled
+    public static String startWebhookConnectionTest(String webhookUrl) {
+        try {
+            if (String.isBlank(webhookUrl)) {
+                return err('Webhook URL is required.');
+            }
+
+            Credentials credentials = getCredentials();
+
+            if (
+                credentials == null ||
+                (
+                    String.isBlank(credentials.secretKey) &&
+                    String.isBlank(credentials.namedCredential)
+                )
+            ) {
+                return err('Stripe credentials are not configured.');
+            }
+
+            String normalizedUrl = normalizeWebhookUrl(webhookUrl);
+
+            /*
+            * First ensure the exact URL is registered and enabled.
+            */
+            StripeService.ApiResponse endpointsResponse =
+                StripeService.get(
+                    '/v1/webhook_endpoints',
+                    new Map<String, String>{
+                        'limit' => '100'
+                    }
+                );
+
+            if (!endpointsResponse.success) {
+                return err(
+                    'Unable to retrieve Stripe webhook endpoints: ' +
+                    endpointsResponse.errorMessage
+                );
+            }
+
+            Boolean endpointFound = false;
+            Boolean endpointEnabled = false;
+            Boolean customerCreatedEnabled = false;
+            String endpointId;
+
+            List<Object> endpoints =
+                endpointsResponse.data != null
+                    ? (List<Object>) endpointsResponse.data.get('data')
+                    : null;
+
+            if (endpoints != null) {
+                for (Object endpointObject : endpoints) {
+                    Map<String, Object> endpoint =
+                        (Map<String, Object>) endpointObject;
+
+                    String registeredUrl =
+                        normalizeWebhookUrl(
+                            String.valueOf(endpoint.get('url'))
+                        );
+
+                    if (
+                        String.isNotBlank(registeredUrl) &&
+                        registeredUrl.equalsIgnoreCase(normalizedUrl)
+                    ) {
+                        endpointFound = true;
+                        endpointId = String.valueOf(endpoint.get('id'));
+
+                        String endpointStatus =
+                            String.valueOf(endpoint.get('status'));
+
+                        endpointEnabled =
+                            'enabled'.equalsIgnoreCase(endpointStatus);
+
+                        Object enabledEventsObject =
+                            endpoint.get('enabled_events');
+
+                        if (enabledEventsObject instanceof List<Object>) {
+                            List<Object> enabledEvents =
+                                (List<Object>) enabledEventsObject;
+
+                            for (Object eventName : enabledEvents) {
+                                String configuredEvent =
+                                    String.valueOf(eventName);
+
+                                if (
+                                    configuredEvent == '*' ||
+                                    configuredEvent.equalsIgnoreCase(
+                                        'customer.created'
+                                    )
+                                ) {
+                                    customerCreatedEnabled = true;
+                                    break;
+                                }
+                            }
+                        }
+
+                        break;
+                    }
+                }
+            }
+
+            if (!endpointFound) {
+                return ok(new Map<String, Object>{
+                    'connected' => false,
+                    'pending' => false,
+                    'status' => 'not_registered',
+                    'message' =>
+                        'The exact webhook URL is not registered in Stripe.'
+                });
+            }
+
+            if (!endpointEnabled) {
+                return ok(new Map<String, Object>{
+                    'connected' => false,
+                    'pending' => false,
+                    'status' => 'disabled',
+                    'endpointId' => endpointId,
+                    'message' =>
+                        'The webhook is registered in Stripe but is disabled.'
+                });
+            }
+
+            if (!customerCreatedEnabled) {
+                return ok(new Map<String, Object>{
+                    'connected' => false,
+                    'pending' => false,
+                    'status' => 'test_event_not_enabled',
+                    'endpointId' => endpointId,
+                    'message' =>
+                        'The webhook does not subscribe to customer.created. ' +
+                        'Register the webhook again before running the test.'
+                });
+            }
+
+            /*
+            * Generate a unique token that will travel inside Stripe metadata.
+            */
+            String testToken =
+                EncodingUtil.convertToHex(
+                    Crypto.generateDigest(
+                        'SHA-256',
+                        Blob.valueOf(
+                            UserInfo.getOrganizationId() +
+                            ':' +
+                            UserInfo.getUserId() +
+                            ':' +
+                            String.valueOf(Datetime.now().getTime()) +
+                            ':' +
+                            String.valueOf(Crypto.getRandomLong())
+                        )
+                    )
+                );
+
+            Datetime requestedAt = Datetime.now();
+
+            Map<String, Object> customerBody =
+                new Map<String, Object>{
+                    'name' => 'Salesforce Webhook Health Check',
+                    'description' =>
+                        'Temporary customer created by Salesforce webhook health check',
+                    'metadata' => new Map<String, Object>{
+                        'salesforce_webhook_test' => 'true',
+                        'salesforce_webhook_test_token' => testToken,
+                        'salesforce_org_id' =>
+                            UserInfo.getOrganizationId()
+                    }
+                };
+
+            StripeService.ApiResponse customerResponse =
+                StripeService.post(
+                    '/v1/customers',
+                    customerBody,
+                    'webhook-test-' + testToken
+                );
+
+            if (!customerResponse.success) {
+                return err(
+                    'Unable to create Stripe webhook test event: ' +
+                    customerResponse.errorMessage
+                );
+            }
+
+            String customerId =
+                customerResponse.data != null
+                    ? String.valueOf(customerResponse.data.get('id'))
+                    : customerResponse.stripeId;
+
+            return ok(new Map<String, Object>{
+                'connected' => false,
+                'pending' => true,
+                'status' => 'pending',
+                'token' => testToken,
+                'customerId' => customerId,
+                'requestedAt' => requestedAt,
+                'endpointId' => endpointId,
+                'message' =>
+                    'Stripe test event created. Waiting for webhook delivery.'
+            });
+
+        } catch (Exception e) {
+            return err(e.getMessage());
+        }
+    }
+
+    @AuraEnabled
+    public static String checkWebhookConnectionTest(
+        String testToken,
+        String customerId,
+        Datetime requestedAt,
+        String webhookUrl
+    ) {
+        try {
+            if (String.isBlank(testToken)) {
+                return err('Webhook test token is required.');
+            }
+
+            Datetime searchFrom = requestedAt != null
+                ? requestedAt.addMinutes(-1)
+                : Datetime.now().addMinutes(-5);
+
+            List<Stripe_Webhook_Log__c> logs = [
+                SELECT
+                    Id,
+                    Event_Id__c,
+                    Event_Type__c,
+                    Payload__c,
+                    Signature_Verified__c,
+                    Processing_Status__c,
+                    Error_Message__c,
+                    CreatedDate
+                FROM Stripe_Webhook_Log__c
+                WHERE Event_Type__c = 'customer.created'
+                AND CreatedDate >= :searchFrom
+                ORDER BY CreatedDate DESC
+                LIMIT 50
+            ];
+
+            for (Stripe_Webhook_Log__c logRecord : logs) {
+                if (String.isBlank(logRecord.Payload__c)) {
+                    continue;
+                }
+
+                Map<String, Object> payload;
+
+                try {
+                    payload =
+                        (Map<String, Object>)
+                        JSON.deserializeUntyped(
+                            logRecord.Payload__c
+                        );
+                } catch (Exception ignored) {
+                    continue;
+                }
+
+                Map<String, Object> data =
+                    payload.get('data') instanceof Map<String, Object>
+                        ? (Map<String, Object>) payload.get('data')
+                        : null;
+
+                Map<String, Object> stripeObject =
+                    data != null &&
+                    data.get('object') instanceof Map<String, Object>
+                        ? (Map<String, Object>) data.get('object')
+                        : null;
+
+                if (stripeObject == null) {
+                    continue;
+                }
+
+                Map<String, Object> metadata =
+                    stripeObject.get('metadata')
+                        instanceof Map<String, Object>
+                        ? (Map<String, Object>)
+                            stripeObject.get('metadata')
+                        : null;
+
+                String receivedToken =
+                    metadata != null
+                        ? String.valueOf(
+                            metadata.get(
+                                'salesforce_webhook_test_token'
+                            )
+                        )
+                        : null;
+
+                if (receivedToken != testToken) {
+                    continue;
+                }
+
+                Boolean signatureVerified =
+                    logRecord.Signature_Verified__c == true;
+
+                Boolean processingSucceeded =
+                    String.isBlank(
+                        logRecord.Processing_Status__c
+                    ) ||
+                    logRecord.Processing_Status__c
+                        .equalsIgnoreCase('Processed') ||
+                    logRecord.Processing_Status__c
+                        .equalsIgnoreCase('Success') ||
+                    logRecord.Processing_Status__c
+                        .equalsIgnoreCase('Completed');
+
+                if (!signatureVerified) {
+                    return ok(new Map<String, Object>{
+                        'connected' => false,
+                        'pending' => false,
+                        'status' => 'signature_failed',
+                        'eventId' => logRecord.Event_Id__c,
+                        'receivedAt' => logRecord.CreatedDate,
+                        'message' =>
+                            'Stripe reached Salesforce, but webhook signature verification failed.'
+                    });
+                }
+
+                if (!processingSucceeded) {
+                    return ok(new Map<String, Object>{
+                        'connected' => false,
+                        'pending' => false,
+                        'status' => 'processing_failed',
+                        'eventId' => logRecord.Event_Id__c,
+                        'receivedAt' => logRecord.CreatedDate,
+                        'message' =>
+                            'Stripe reached Salesforce, but webhook processing failed: ' +
+                            logRecord.Error_Message__c
+                    });
+                }
+
+                /*
+                * Optional cleanup of the temporary customer.
+                */
+                if (String.isNotBlank(customerId)) {
+                    StripeService.del(
+                        '/v1/customers/' +
+                        EncodingUtil.urlEncode(
+                            customerId,
+                            'UTF-8'
+                        )
+                    );
+                }
+
+                return ok(new Map<String, Object>{
+                    'connected' => true,
+                    'pending' => false,
+                    'status' => 'connected',
+                    'eventId' => logRecord.Event_Id__c,
+                    'receivedAt' => logRecord.CreatedDate,
+                    'message' =>
+                        'Webhook connection successful. Stripe delivered the event, ' +
+                        'Salesforce verified the signature and processed the webhook.'
+                });
+            }
+
+            Boolean timedOut =
+                requestedAt != null &&
+                requestedAt.addSeconds(10) < Datetime.now();
+
+            if (timedOut) {
+                return ok(new Map<String, Object>{
+                    'connected' => false,
+                    'pending' => false,
+                    'status' => 'delivery_failed',
+                    'webhookUrl' => webhookUrl,
+                    'message' =>
+                        'Webhook connection failed. The endpoint may be incorrect (HTTP 404) or unavailable. Check the Stripe Dashboard for the exact delivery error.'
+                });
+            }
+            
+            return ok(new Map<String, Object>{
+                'connected' => false,
+                'pending' => true,
+                'status' => 'pending',
+                'webhookUrl' => webhookUrl,
+                'message' => 'Waiting for Stripe webhook delivery.'
+            });
+
+        } catch (Exception e) {
+            return err(e.getMessage());
+        }
+    }
+
+    private static String normalizeWebhookUrl(String value) {
+        if (String.isBlank(value)) {
+            return null;
+        }
+
+        String normalized = value.trim();
+
+        while (normalized.endsWith('/')) {
+            normalized = normalized.substring(
+                0,
+                normalized.length() - 1
+            );
+        }
+
+        return normalized;
+    }
 
     /** Register this org's webhook endpoint in Stripe via the API and auto-save the
      *  returned signing secret to the active environment. */
     @AuraEnabled
-    public static String registerWebhook() {
+    public static String registerWebhook(String webhookUrl) {
         try {
             Credentials c = getCredentials();
             if (c == null || (String.isBlank(c.secretKey) && String.isBlank(c.namedCredential))) {
                 return err('Add your Stripe secret key first, then register.');
             }
-            String url = buildWebhookUrl(c);
+            // String url = buildWebhookUrl(c);
+            String url = String.isNotBlank(webhookUrl)
+                ? webhookUrl.trim()
+                : buildWebhookUrl(c);
             if (url.containsIgnoreCase('.my.salesforce.com')) {
                 return err('The webhook URL points at the org login domain (not publicly reachable). Set the "Webhook Base URL" to your public Site (…my.site.com) and register again.');
             }
@@ -261,6 +691,7 @@ public with sharing class StripeConfigReader {
                 'url' => url,
                 'description' => 'Salesforce Stripe Connector',
                 'enabled_events' => new List<Object>{
+                    'customer.created',
                     // Checkout
                     'checkout.session.completed', 'checkout.session.expired',
                     'checkout.session.async_payment_succeeded', 'checkout.session.async_payment_failed',
@@ -598,10 +1029,54 @@ public with sharing class StripeConfigReader {
     }
 
     /** Webhook delivery URL — public Site base if configured, else the org domain. */
-    private static String buildWebhookUrl(Credentials c) {
-        String base = (c != null && String.isNotBlank(c.webhookBaseUrl))
-            ? c.webhookBaseUrl : URL.getOrgDomainUrl().toExternalForm();
-        return base.removeEnd('/') + '/services/apexrest/stripe/webhook';
+    private static final String WEBHOOK_PATH =
+        '/services/apexrest/acxitech/stripe/webhook';
+
+    private static String buildWebhookUrl(
+        Credentials c
+    ) {
+       
+        if (
+            c == null ||
+            String.isBlank(c.webhookBaseUrl)
+        ) {
+            return null;
+        }
+
+        String base =
+            c.webhookBaseUrl.trim();
+
+        if (
+            !base.startsWithIgnoreCase(
+                'https://'
+            ) &&
+            !base.startsWithIgnoreCase(
+                'http://'
+            )
+        ) {
+            base = 'https://' + base;
+        }
+
+        while (base.endsWith('/')) {
+            base = base.substring(
+                0,
+                base.length() - 1
+            );
+        }
+
+        return base + WEBHOOK_PATH;
+    }
+
+    @AuraEnabled(cacheable=true)
+    public static String getDefaultWebhookBaseUrl() {
+    
+        String orgUrl = URL.getOrgDomainUrl().toExternalForm();
+    
+        if (orgUrl.endsWith('.my.salesforce.com')) {
+            return orgUrl.replace('.my.salesforce.com', '.my.site.com');
+        }
+    
+        return orgUrl;
     }
 
     private static String mask(String s) {
